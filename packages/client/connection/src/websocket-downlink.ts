@@ -1,8 +1,8 @@
 /** Host-side WebSocket carrier for the two server-to-browser event streams. */
 
-import { randomUUID } from 'node:crypto'
 import type { IncomingMessage } from 'node:http'
 import type { Duplex } from 'node:stream'
+import { randomUuid } from '@deepseek-ai/dsh-random-uuid'
 import WebSocket, { WebSocketServer } from 'ws'
 import type {
   ApiProxy, HostFrame, MuxFrame, RpcRequest, ServerRequest,
@@ -35,7 +35,7 @@ function send(socket: WebSocket, frame: RpcRequest<Frame>): Promise<void> {
 
 function failureFrame(error: unknown): RpcRequest<Frame> {
   return {
-    rpcId: RpcId(randomUUID()),
+    rpcId: RpcId(randomUuid()),
     payload: {
       type: 'stream/error',
       error: { code: 'internal', message: String(error), details: {} },
@@ -63,7 +63,7 @@ export class WebSocketDownlinks {
    */
   handleMux(req: IncomingMessage, socket: Duplex, head: Buffer): void {
     this.upgrade(req, socket, head, signal => this.api.events.mux({
-      rpcId: RpcId(randomUUID()),
+      rpcId: RpcId(randomUuid()),
       payload: {},
     }, signal))
   }
@@ -76,7 +76,7 @@ export class WebSocketDownlinks {
    */
   handleHost(req: IncomingMessage, socket: Duplex, head: Buffer): void {
     this.upgrade(req, socket, head, signal => this.api.events.host({
-      rpcId: RpcId(randomUUID()),
+      rpcId: RpcId(randomUuid()),
       payload: {},
     }, signal))
   }

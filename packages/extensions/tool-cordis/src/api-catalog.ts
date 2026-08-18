@@ -2078,6 +2078,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the disposer removing the route.',
       },
       {
+        signature: 'registerGuard(guard: WebGuard): () => void',
+        description: 'Register a global HTTP and/or upgrade guard. Guards run in registration order before route matching and return a disposer that removes only this registration.',
+        parameters: [{ name: 'guard', description: 'the HTTP and upgrade checks.' }],
+        returns: 'the disposer removing the guard.',
+      },
+      {
         signature: 'registerFallback(handler: WebRoute[\'handler\']): () => void',
         description: 'Claim the fallback seat: the handler answering every request no named route matches (the SPA dist server in the shipped Web composition). One owner only — a second registration throws, because two fallbacks cannot compose.',
         parameters: [{ name: 'handler', description: 'owns the full response lifecycle of unmatched requests.' }],
@@ -4566,6 +4572,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'WebFetchResultView',
     declaration: 'export interface WebFetchResultView {\n    card: \'web\';\n    kind: \'fetch\';\n    title?: string;\n    url: string;\n    statusCode: number;\n    truncated: boolean;\n}',
+  },
+  {
+    name: 'WebGuard',
+    declaration: 'export interface WebGuard {\n    readonly http?: (req: IncomingMessage, res: ServerResponse) => boolean | Promise<boolean>;\n    readonly upgrade?: (req: IncomingMessage, socket: Duplex, head: Buffer) => boolean | Promise<boolean>;\n}',
   },
   {
     name: 'WebResultView',

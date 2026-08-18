@@ -1,0 +1,4 @@
+# Bilingual-pair consistency record. Run the translation-pairing gate with
+# --write after both README files are updated.
+README.md: 89439fb5d20518f55f0fa79ea635f301325ebe8d
+README.zh.md: f58cb27fd6c1a3a348e12af24a7c24de7c866164

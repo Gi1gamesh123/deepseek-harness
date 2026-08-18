@@ -302,4 +302,34 @@ describe('default transport seam', () => {
     )
     expect([...document.querySelectorAll('script')]).toEqual([])
   })
+
+  it('redirects an expired authenticated page to login after a script load failure', async () => {
+    vi.spyOn(document.head, 'append').mockImplementation((...nodes) => {
+      const script = nodes[0]
+      if (!(script instanceof HTMLScriptElement)) throw new Error('expected script node')
+      queueMicrotask(() => { script.dispatchEvent(new Event('error')) })
+    })
+    const fetch = vi.fn(async () => new Response(JSON.stringify({ authenticated: false })))
+    const assign = vi.fn()
+    vi.stubGlobal('fetch', fetch)
+    vi.stubGlobal('location', {
+      pathname: '/sessions/current',
+      search: '?panel=models',
+      hash: '#provider',
+      assign,
+    })
+    try {
+      const loader = new ClientModuleSystem({ modules: [row('dee')], staticModules: {} })
+      await expect(loader.prefetch('dee')).rejects.toThrow('bundle script /plugins/dee/client.js?rev=0 failed to load')
+      await vi.waitFor(() => {
+        expect(assign).toHaveBeenCalledWith('/auth/login?next=%2Fsessions%2Fcurrent%3Fpanel%3Dmodels%23provider')
+      })
+      expect(fetch).toHaveBeenCalledWith('/auth/session', {
+        credentials: 'same-origin',
+        headers: { accept: 'application/json' },
+      })
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
 })

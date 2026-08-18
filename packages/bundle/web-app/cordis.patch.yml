@@ -119,6 +119,18 @@
         host: !!js ctx.webStartup.host ?? '127.0.0.1'
         port: !!js ctx.webStartup.port ?? 3080
 
+    # Remote bind is protected by the host-level login plugin. The webserver
+    # also fails closed if a custom composition enables remote bind without a
+    # guard, so this is a defense-in-depth composition fact.
+    - id: web-auth
+      name: '@deepseek-ai/dsh-host-web-auth'
+      config:
+        enabled: !!js ctx.webServer.host === '0.0.0.0'
+        username: admin
+        passwordEnv: DSH_WEB_PASSWORD
+        sessionTtlSeconds: 43200
+        secureCookie: false
+
     # Web glue owned by this bundle: resolves the built frontend dist (an
     # assembly fact of dsh-web-app, never user config), mounts the
     # frontend-static fallback owner, registers the web-surface prompt
@@ -161,6 +173,10 @@
         # A deployment adding authorities keeps this expression and concatenates
         # its literals, for example: ['app.internal', ...ctx.webRuntime.trustedHosts].
         trustedHosts: !!js ctx.webRuntime.trustedHosts
+        # The global web-auth guard runs before this route on remote binds.
+        # Only that authenticated composition exposes the configuration plane
+        # to its declared serving authorities.
+        authenticatedHosts: !!js ctx.webRuntime.authenticatedHosts
 
     - id: api-remotes
       name: '@deepseek-ai/dsh-api-remotes'

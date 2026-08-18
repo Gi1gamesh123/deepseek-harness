@@ -74,7 +74,7 @@ function fakeResponse(): { response: ServerResponse; state: { status?: number; b
   return { response, state }
 }
 
-async function mounted(config?: { trustedHosts?: string[] }): Promise<{
+async function mounted(config?: { trustedHosts?: string[]; authenticatedHosts?: string[] }): Promise<{
   routes: WebRoute[]
   upgrades: WebUpgradeRoute[]
   dispose: () => Promise<void>
@@ -113,6 +113,16 @@ describe('connection node half', () => {
     await expect(fiber).rejects.toThrow(/not a bare host\[:port\] authority/)
     expect(routes).toHaveLength(0)
     expect(upgrades).toHaveLength(0)
+  })
+
+  it('fails the load when an authenticated authority is not trusted', async () => {
+    const ctx = new Context()
+    ctx.provide('webServer', fakeHttpServer([], []) as WebServer)
+    const fiber = ctx.plugin({ inject: [...inject], apply }, {
+      trustedHosts: ['harness.example'],
+      authenticatedHosts: ['other.example'],
+    })
+    await expect(fiber).rejects.toThrow(/authenticatedHosts entry .* is absent from trustedHosts/)
   })
 
   it('registers one HTTP route plus one upgrade route per downlink and removes all three with the fiber', async () => {
@@ -189,6 +199,20 @@ describe('connection node half', () => {
     const read = fakeResponse()
     await routes[0]!.handler(fakeRequest({ host: 'harness.example' }), read.response)
     expect(read.state.status).not.toBe(403)
+    await dispose()
+  })
+
+  it('allows privileged methods for an explicitly authenticated authority', async () => {
+    const { routes, dispose } = await mounted({
+      trustedHosts: ['harness.example'],
+      authenticatedHosts: ['harness.example'],
+    })
+    const allowed = fakeResponse()
+    await routes[0]!.handler(
+      fakeRequest({ host: 'harness.example' }, `${API_PATH}/settings.describe`),
+      allowed.response,
+    )
+    expect(allowed.state.status).not.toBe(403)
     await dispose()
   })
 
