@@ -1,57 +1,62 @@
-# DeepSeek Harness
+# DeepSeek Harness Auth
 
 English | [中文](README.zh.md)
 
-DeepSeek Harness (`dsh`) is an open-source agent harness developed by [DeepSeek AI](https://deepseek.com).
+This repository is a downstream customization of DeepSeek Harness for self-hosted Web deployments. It adds public binding with account-password authentication and keeps the plugin-based Cordis architecture.
 
-It uses an architecture where **everything is a plugin**, and is powered by [Cordis](https://github.com/cordiverse/cordis), whose design is described in [_A Programming Paradigm for Spatiotemporal Composability_](https://github.com/cordiverse/paper).
+This is a source-only development repository. There is no prebuilt package for this customization; install dependencies and compile it locally before every deployment.
 
-## Developer preview
+## What this repository adds
 
-DeepSeek Harness is currently in _developer preview_ and is iterating rapidly. **THERE WILL BE COMPATIBILITY-BREAKING CHANGES.**
+- Binding the Web service to `0.0.0.0` enables the host authentication plugin.
+- The login guard covers the Web UI, API routes, SPA fallback, and WebSocket upgrades.
+- The browser client uses a Linux-safe UUID fallback and recovers to the login page when a restart invalidates its session.
+- Login uses a CSRF double-submit cookie, in-memory sessions, and failed-login throttling.
+- The password is read from `DSH_WEB_PASSWORD`; credentials, cookies, and session tokens are not committed.
 
-## Run
+## Requirements
 
-### Run from `npm`
+- Node.js `22.19` or newer, and `pnpm`.
+- A `DEEPSEEK_API_KEY` for model requests.
+- A long random value for `DSH_WEB_PASSWORD`.
 
-Install `Node.js`, then run:
+<a id="run"></a><a id="run-from-source"></a>
+
+## Build and run
+
+Clone this repository and build the runtime and browser bundles locally:
 
 ```sh
-npx @deepseek-ai/dsh web
-```
-
-The command starts the Web UI, served at `http://127.0.0.1:3080` by default. See [Web UI guide](docs/user/guide/index.md).
-
-### Run from source
-
-To run from a repository checkout:
-
-```sh
-git clone https://github.com/deepseek-ai/deepseek-harness.git
-cd deepseek-harness
+git clone https://github.com/Gi1gamesh123/deepseek-harness-auth.git
+cd deepseek-harness-auth
 pnpm install
+export DEEPSEEK_API_KEY='your-deepseek-api-key'
+export DSH_WEB_PASSWORD='choose-a-long-random-password'
 pnpm run build
-pnpm dsh web
+pnpm dsh web --host 0.0.0.0 --port 3080
 ```
 
-## Community and support
+Open `http://<server-ip>:3080/` and sign in with username `admin` and the value of `DSH_WEB_PASSWORD`. Running `pnpm dsh web` without `--host 0.0.0.0` keeps the service on loopback and does not enable the public-bind authentication row.
 
-- Feel free to submit feedback or bug reports through [GitHub Discussions](https://github.com/deepseek-ai/deepseek-harness/discussions).
-- Add the [`dsh-plugin`](https://github.com/topics/dsh-plugin) topic to your plugin repository for discoverability.
-- Join <a href="https://discord.gg/Ycq5dCaS4">DeepSeek Harness Discord community</a>.
+## Public deployment requirements
 
-## Contributing
+The bundled listener is plain HTTP. Put it behind an HTTPS reverse proxy before exposing it to the Internet, restrict the firewall to the proxy, and provide `DSH_WEB_PASSWORD` through the service manager's environment file rather than a checked-in file. The default cookie configuration supports direct HTTP; an HTTPS deployment should set `secureCookie: true` in its Web auth configuration.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+Authentication sessions live only in the service process and disappear on restart. The browser returns to `/auth/login` when it detects that its session is gone. A restart therefore requires users to sign in again.
 
-## Development
+## Useful checks
 
-Start with the [development guide](docs/development.md) and [architecture documentation](docs/architecture.md).
+```sh
+pnpm run test
+pnpm run typecheck
+pnpm run doc-sync
+pnpm run lint
+```
 
-For agents, follow [AGENTS.md](AGENTS.md).
+For package-specific contracts, see [`packages/host/web-auth/README.md`](packages/host/web-auth/README.md) and [`packages/bundle/web-app/README.md`](packages/bundle/web-app/README.md). For the composition and extension model, see [`docs/architecture.md`](docs/architecture.md).
 
 ## License
 
 [MIT](LICENSE)
 
-Third-party dependencies and their licenses are disclosed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Third-party dependencies and their licenses are disclosed in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
