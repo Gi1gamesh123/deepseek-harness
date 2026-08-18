@@ -29,6 +29,7 @@ const install: InvariantInstaller = (ctx, fail) => {
       | {
         register(route: { kind: 'exact'; path: string; handler: () => void }): () => void
         registerUpgrade(route: { path: string; handler: () => void }): () => void
+        registerGuard(guard: { http: () => boolean }): () => void
       }
       | undefined
     if (server === undefined) return // no webserver row in this composition
@@ -43,6 +44,9 @@ const install: InvariantInstaller = (ctx, fail) => {
       const upgradeProbe = { path: '/__dsh_invariant_upgrade_probe__', handler: () => {} }
       server.registerUpgrade(upgradeProbe)()
       server.registerUpgrade(upgradeProbe)()
+      const guardProbe = { http: () => true }
+      server.registerGuard(guardProbe)()
+      server.registerGuard(guardProbe)()
     } catch {
       fail('webServer route disposer left a route registered — route tables and fiber lifecycles diverged')
     }

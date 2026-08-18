@@ -9,6 +9,21 @@ import type {
   ClientModuleSystemOptions, ClientPluginHandoff, DshWindow,
 } from './manifest.ts'
 
+/** Redirect a browser whose process-local login session expired while the page stayed open. */
+async function redirectExpiredSession(): Promise<void> {
+  if (typeof globalThis.fetch !== 'function' || typeof globalThis.location === 'undefined') return
+  const response = await globalThis.fetch('/auth/session', {
+    credentials: 'same-origin',
+    headers: { accept: 'application/json' },
+  }).catch(() => undefined)
+  if (response?.ok !== true) return
+  const value = await response.json().catch(() => undefined) as { authenticated?: unknown } | undefined
+  if (value?.authenticated !== false) return
+  const { pathname, search, hash } = globalThis.location
+  const next = encodeURIComponent(pathname + search + hash)
+  globalThis.location.assign('/auth/login?next=' + next)
+}
+
 /** Default bundle-load hook: same-origin external classic script. */
 const defaultLoadBundle = (url: string): Promise<void> => new Promise((resolve, reject) => {
   const el = document.createElement('script')
@@ -20,6 +35,7 @@ const defaultLoadBundle = (url: string): Promise<void> => new Promise((resolve, 
   }, { once: true })
   el.addEventListener('error', () => {
     el.remove()
+    void redirectExpiredSession()
     reject(new Error(`client-modules: bundle script ${url} failed to load`))
   }, { once: true })
   document.head.append(el)

@@ -35,6 +35,8 @@ interface Config {
   host: '127.0.0.1' | '0.0.0.0'
   /** Listen port; zero requests an OS-assigned port. */
   port: number
+  /** Require at least one global guard before accepting requests. */
+  requireGuard?: boolean
 }
 ```
 
@@ -78,6 +80,15 @@ register(route: WebRoute): () => void
 registerUpgrade(route: WebUpgradeRoute): () => void
 
 /**
+ * Register a global HTTP and/or upgrade guard. Guards run in registration
+ * order before route matching and return a disposer that removes only this
+ * registration.
+ * @param guard - the HTTP and upgrade checks.
+ * @returns the disposer removing the guard.
+ */
+registerGuard(guard: WebGuard): () => void
+
+/**
  * Claim the fallback seat: the handler answering every request no named
  * route matches (the SPA dist server in the shipped Web composition). One
  * owner only — a second registration throws, because two fallbacks cannot
@@ -104,5 +115,5 @@ tapIndex(transform: (html: string) => string): () => void
 applyIndexTaps(html: string): string
 ```
 
-Source: [`packages/host/webserver/src/index.ts:59`](../../packages/host/webserver/src/index.ts)
+Source: [`packages/host/webserver/src/index.ts:69`](../../packages/host/webserver/src/index.ts)
 <!-- END GENERATED cordis-surface -->

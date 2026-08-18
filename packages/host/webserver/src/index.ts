@@ -41,12 +41,22 @@ export interface WebUpgradeRoute {
   handler: (req: IncomingMessage, socket: Duplex, head: Buffer) => void | Promise<void>
 }
 
+/** Global request guard installed before named routes and the fallback. */
+export interface WebGuard {
+  /** Return true to continue; false means the guard has answered the request. */
+  readonly http?: (req: IncomingMessage, res: ServerResponse) => boolean | Promise<boolean>
+  /** Return true to continue; false means the guard has rejected the socket. */
+  readonly upgrade?: (req: IncomingMessage, socket: Duplex, head: Buffer) => boolean | Promise<boolean>
+}
+
 /** Gateway config: the listen address. */
 export interface Config {
   /** Listen host; the two supported values are loopback and all-interfaces. */
   host: '127.0.0.1' | '0.0.0.0'
   /** Listen port; zero requests an OS-assigned port. */
   port: number
+  /** Require at least one global guard before accepting requests. */
+  requireGuard?: boolean
 }
 
 /**
@@ -60,11 +70,13 @@ export class WebServer extends Service {
   static Config: z<Config> = z.object({
     host: z.union([z.const('127.0.0.1'), z.const('0.0.0.0')]).required(),
     port: z.natural().max(65535).required(),
+    requireGuard: z.boolean().default(false),
   })
 
   private readonly exact = new Map<string, WebRoute>()
   private readonly prefixes = new Map<string, WebRoute>()
   private readonly upgrades = new Map<string, WebUpgradeRoute>()
+  private readonly guards: WebGuard[] = []
   private readonly upgradedSockets = new Set<Duplex>()
   private readonly indexTaps: ((html: string) => string)[] = []
   private fallback: WebRoute['handler'] | undefined
@@ -115,6 +127,21 @@ export class WebServer extends Service {
   }
 
   /**
+   * Register a global HTTP and/or upgrade guard. Guards run in registration
+   * order before route matching and return a disposer that removes only this
+   * registration.
+   * @param guard - the HTTP and upgrade checks.
+   * @returns the disposer removing the guard.
+   */
+  registerGuard(guard: WebGuard): () => void {
+    this.guards.push(guard)
+    return () => {
+      const at = this.guards.indexOf(guard)
+      if (at !== -1) this.guards.splice(at, 1)
+    }
+  }
+
+  /**
    * Claim the fallback seat: the handler answering every request no named
    * route matches (the SPA dist server in the shipped Web composition). One
    * owner only — a second registration throws, because two fallbacks cannot
@@ -147,6 +174,15 @@ export class WebServer extends Service {
   /** Listen; resolves once the socket is bound (rejection = FAILED fiber). */
   async [Service.init](): Promise<void> {
     const handle = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+      const snapshot = this.guards.slice()
+      if ((this.config.requireGuard === true || this.config.host === '0.0.0.0') && snapshot.length === 0) {
+        res.writeHead(503, { 'content-type': 'text/plain; charset=utf-8' })
+        res.end('web authentication is not ready')
+        return
+      }
+      for (const guard of snapshot) {
+        if (guard.http !== undefined && !(await guard.http(req, res))) return
+      }
       /* v8 ignore next -- `?? '/'` arm: node:http always sets url on server
       requests; the field is only optional on the client-side IncomingMessage type */
       const rawPath = new URL(req.url ?? '/', 'http://x').pathname
@@ -188,29 +224,35 @@ export class WebServer extends Service {
         socket.off('error', onError)
         this.upgradedSockets.delete(socket)
       })
-      let route: WebUpgradeRoute | undefined
-      try {
-        /* v8 ignore next -- node:http always sets url on server requests. */
-        route = this.upgrades.get(new URL(req.url ?? '/', 'http://x').pathname)
-      } catch (error) {
-        this.ctx.logger.warn(error instanceof Error ? error : new Error(String(error)))
-        socket.destroy()
-        return
-      }
-      if (route === undefined) {
-        socket.destroy()
-        return
-      }
-      this.upgradedSockets.add(socket)
-      try {
-        Promise.resolve(route.handler(req, socket, head)).catch((error: unknown) => {
+      const dispatch = async (): Promise<void> => {
+        const snapshot = this.guards.slice()
+        if ((this.config.requireGuard === true || this.config.host === '0.0.0.0') && snapshot.length === 0) {
+          socket.destroy()
+          return
+        }
+        for (const guard of snapshot) {
+          if (guard.upgrade !== undefined && !(await guard.upgrade(req, socket, head))) return
+        }
+        let route: WebUpgradeRoute | undefined
+        try {
+          /* v8 ignore next -- node:http always sets url on server requests. */
+          route = this.upgrades.get(new URL(req.url ?? '/', 'http://x').pathname)
+        } catch (error) {
           this.ctx.logger.warn(error instanceof Error ? error : new Error(String(error)))
           socket.destroy()
-        })
-      } catch (error) {
+          return
+        }
+        if (route === undefined) {
+          socket.destroy()
+          return
+        }
+        this.upgradedSockets.add(socket)
+        await route.handler(req, socket, head)
+      }
+      dispatch().catch((error: unknown) => {
         this.ctx.logger.warn(error instanceof Error ? error : new Error(String(error)))
         socket.destroy()
-      }
+      })
     })
 
     await new Promise<void>((resolve, reject) => {

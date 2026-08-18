@@ -405,6 +405,13 @@ export interface ConnectionConfig {
    * that is not a bare, canonical authority fails the plugin load.
    */
   trustedHosts?: string[]
+  /**
+   * Trusted authorities whose requests have already passed deployment
+   * authentication and may reach the configuration plane. Every entry must
+   * also appear in `trustedHosts`; the default keeps privileged methods
+   * loopback-only.
+   */
+  authenticatedHosts?: string[]
   /** Maximum buffered JSON body for every `/api` request. */
   maxRequestBodyBytes?: number
 }
@@ -785,6 +792,34 @@ export interface Config {
 
 Source: [`packages/host/frontend-static/src/index.ts:28`](../packages/host/frontend-static/src/index.ts)
 
+<a id="deepseek-aidsh-host-web-auth"></a>
+
+## `@deepseek-ai/dsh-host-web-auth`
+
+Requires: `webServer` · `credentials`
+
+```ts config-catalog
+/** Web authentication configuration. */
+export interface Config {
+  /** Login name accepted by the form. */
+  username: string
+  /** Credential reference containing the login password. */
+  passwordEnv: string
+  /** Lifetime of an in-memory session in seconds. */
+  sessionTtlSeconds: number
+  /** Failed login attempts allowed per remote address and window. */
+  loginAttemptLimit: number
+  /** Failed-login counting window in seconds. */
+  loginAttemptWindowSeconds: number
+  /** Add Secure to cookies when the deployment is served through HTTPS. */
+  secureCookie: boolean
+  /** Disable the plugin when a composition supplies its own authentication. */
+  enabled: boolean
+}
+```
+
+Source: [`packages/host/web-auth/src/index.ts:26`](../packages/host/web-auth/src/index.ts)
+
 <a id="deepseek-aidsh-host-webserver"></a>
 
 ## `@deepseek-ai/dsh-host-webserver`
@@ -796,10 +831,12 @@ export interface Config {
   host: '127.0.0.1' | '0.0.0.0'
   /** Listen port; zero requests an OS-assigned port. */
   port: number
+  /** Require at least one global guard before accepting requests. */
+  requireGuard?: boolean
 }
 ```
 
-Source: [`packages/host/webserver/src/index.ts:45`](../packages/host/webserver/src/index.ts)
+Source: [`packages/host/webserver/src/index.ts:53`](../packages/host/webserver/src/index.ts)
 
 <a id="deepseek-aidsh-invariants"></a>
 
@@ -3137,6 +3174,7 @@ Imported as libraries by other packages; a `cordis.yml` cannot load them.
 - `@deepseek-ai/dsh-loader-smoke` ([`packages/test-support/loader-smoke/src/index.ts`](../packages/test-support/loader-smoke/src/index.ts))
 - `@deepseek-ai/dsh-native-command` ([`packages/util/native-command/src/index.ts`](../packages/util/native-command/src/index.ts))
 - `@deepseek-ai/dsh-output-retention` ([`packages/util/output-retention/src/index.ts`](../packages/util/output-retention/src/index.ts))
+- `@deepseek-ai/dsh-random-uuid` ([`packages/util/random-uuid/src/index.ts`](../packages/util/random-uuid/src/index.ts))
 - `@deepseek-ai/dsh-sandbox-windows-acl` ([`packages/sandbox/sandbox-windows-acl/src/index.ts`](../packages/sandbox/sandbox-windows-acl/src/index.ts))
 - `@deepseek-ai/dsh-scope` ([`packages/core/scope/src/index.ts`](../packages/core/scope/src/index.ts))
 - `@deepseek-ai/dsh-sdk-client` ([`packages/sdk/client/src/index.ts`](../packages/sdk/client/src/index.ts))

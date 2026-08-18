@@ -28,13 +28,13 @@ afterEach(async () => {
 })
 
 /** Write a cordis.yml with one webserver row, then boot it through the real Loader. */
-async function loadComposition(port = 0): Promise<Context> {
+async function loadComposition(port = 0, host: '127.0.0.1' | '0.0.0.0' = '127.0.0.1'): Promise<Context> {
   root = await mkdtemp(join(tmpdir(), 'dsh-webserver-loader-'))
   const configPath = join(root, 'cordis.yml')
   await writeFile(configPath, [
     "- name: '@deepseek-ai/dsh-host-webserver'",
     '  config:',
-    "    host: '127.0.0.1'",
+    `    host: '${host}'`,
     `    port: ${String(port)}`,
     '',
   ].join('\n'))
@@ -86,6 +86,29 @@ async function upgrade(port: number, path: string): Promise<ReturnType<typeof co
 }
 
 describe('real Loader composition', () => {
+  it('runs global guards before routes and restores access on disposal', { timeout: 60_000 }, async () => {
+    const loaded = await loadComposition()
+    const server = loaded.webServer
+    server.register({ kind: 'exact', path: '/guarded', handler: (_req, res) => { res.writeHead(200); res.end('allowed') } })
+    const dispose = server.registerGuard({
+      http: (_req, res) => { res.writeHead(401); res.end('blocked'); return false },
+    })
+    expect(await request(server.port, '/guarded')).toMatchObject({ status: 401, body: 'blocked' })
+    dispose()
+    expect(await request(server.port, '/guarded')).toMatchObject({ status: 200, body: 'allowed' })
+  })
+
+  it('fails closed for remote bind until a guard is registered', { timeout: 60_000 }, async () => {
+    const loaded = await loadComposition(0, '0.0.0.0')
+    const server = loaded.webServer
+    server.register({ kind: 'exact', path: '/remote', handler: (_req, res) => { res.writeHead(200); res.end('open') } })
+    expect(await request(server.port, '/remote')).toMatchObject({ status: 503, body: 'web authentication is not ready' })
+    const dispose = server.registerGuard({ http: () => true })
+    expect(await request(server.port, '/remote')).toMatchObject({ status: 200, body: 'open' })
+    dispose()
+    expect(await request(server.port, '/remote')).toMatchObject({ status: 503 })
+  })
+
   // Real-Loader composition resolves workspace packages through tsx at test
   // time; first resolution after the host/client program split is slow enough
   // to trip the default 5s budget on cold caches.
